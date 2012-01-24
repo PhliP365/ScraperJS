@@ -44,6 +44,7 @@ tmc.ScraperJS = function() {
  */
 tmc.ScraperJS.RX_PARSE_LINK = /^([^>]*)>(.*)$/;
 
+
 /**
  * Matches <base> tag's href attribute value.
  *
@@ -51,6 +52,7 @@ tmc.ScraperJS.RX_PARSE_LINK = /^([^>]*)>(.*)$/;
  * @type {!RegExp}
  */
 tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)/gi;
+
 
 /**
  * Matches:
@@ -98,6 +100,7 @@ tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s
  */
 tmc.ScraperJS.RX_HTML_URL_EXTRACTOR = /<(?:(?:a(?:rea)?\s+(?:[^<>\s]+\s+)*?href|i?frame\s+(?:[^<>\s]+\s+)*?src)\s*=\s*['"]?([^'"<>\s]+)|link\s+(?:(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"]?\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)|(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)['"]?\s+(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"<>\s]))/gi;
 
+
 /**
  * Maximum amount of time allowed for the crawl (expressed in milliseconds, 0 for unlimited).
  *
@@ -105,6 +108,7 @@ tmc.ScraperJS.RX_HTML_URL_EXTRACTOR = /<(?:(?:a(?:rea)?\s+(?:[^<>\s]+\s+)*?href|
  * @private
  */
 tmc.ScraperJS.prototype.maxCrawlTime_ = 0;
+
 
 /**
  * Maximum depth allowed for the crawl (0 for unlimited).
@@ -114,6 +118,7 @@ tmc.ScraperJS.prototype.maxCrawlTime_ = 0;
  */
 tmc.ScraperJS.prototype.maxCrawlDepth_ = 0;
 
+
 /**
  * Maximum number of links to crawl (0 for unlimited).
  *
@@ -121,6 +126,7 @@ tmc.ScraperJS.prototype.maxCrawlDepth_ = 0;
  * @private
  */
 tmc.ScraperJS.prototype.maxCrawledLinks_ = 0;
+
 
 /**
  * Maximum amount of time allowed for fetching a link (expressed in milliseconds, 0 for unlimited).
@@ -130,6 +136,7 @@ tmc.ScraperJS.prototype.maxCrawledLinks_ = 0;
  */
 tmc.ScraperJS.prototype.maxLinkFetchTime_ = 60 * 1000;
 
+
 /**
  * List of rules to execute to compute link priority.
  *
@@ -137,6 +144,7 @@ tmc.ScraperJS.prototype.maxLinkFetchTime_ = 60 * 1000;
  * @private
  */
 tmc.ScraperJS.prototype.linkPriorityRules_ = null;
+
 
 /**
  * Highest link priority so far.
@@ -146,6 +154,7 @@ tmc.ScraperJS.prototype.linkPriorityRules_ = null;
  */
 tmc.ScraperJS.prototype.highestLinkPriority_ = 0;
 
+
 /**
  * Lowest link priority so far.
  *
@@ -153,6 +162,7 @@ tmc.ScraperJS.prototype.highestLinkPriority_ = 0;
  * @private
  */
 tmc.ScraperJS.prototype.lowestLinkPriority_ = 0;
+
 
 /**
  * Priority queue storing the links waiting to be crawled.
@@ -162,6 +172,7 @@ tmc.ScraperJS.prototype.lowestLinkPriority_ = 0;
  */
 tmc.ScraperJS.prototype.linkQueue_ = null;
 
+
 /**
  * Hash table used to avoid duplicate links.
  *
@@ -169,6 +180,7 @@ tmc.ScraperJS.prototype.linkQueue_ = null;
  * @private
  */
 tmc.ScraperJS.prototype.linkStatuses_ = null;
+
 
 /**
  * Time when the crawl was started (expressed in milliseconds since the epoch).
@@ -178,6 +190,7 @@ tmc.ScraperJS.prototype.linkStatuses_ = null;
  */
 tmc.ScraperJS.prototype.startCrawlTime_ = 0;
 
+
 /**
  * Number of links that have been crawled so far.
  *
@@ -185,6 +198,7 @@ tmc.ScraperJS.prototype.startCrawlTime_ = 0;
  * @private
  */
 tmc.ScraperJS.prototype.numCrawledLinks_ = 0;
+
 
 /**
  * The link extractors that the ScraperJS should be using to extract links from a document. 
@@ -206,12 +220,14 @@ tmc.ScraperJS.prototype.numCrawledLinks_ = 0;
  */
 tmc.ScraperJS.prototype.linkExtractors_ = null;
 
+
 /**
  * Hash table used to avoid duplicate results.
  *
  * @type {?Object.<number>}
  */
 tmc.ScraperJS.prototype.uniqueResults_ = null;
+
 
 /**
  * Sets the maximum amount of time allowed for the crawl (expressed in milliseconds, 0 for unlimited).
@@ -283,63 +299,6 @@ tmc.ScraperJS.prototype.setMaxLinkFetchTime = function(maxLinkFetchTime) {
 tmc.ScraperJS.prototype.getMaxLinkFetchTime = function() {
     return this.maxLinkFetchTime_;
 };
-
-/* Moved to the bookmarklet code because of IE
-
-    // Remove all elements from the DOM so it is ready to 
-    // render the UI
-    //
-    function clearDom() {
-        // Using document.write(): seems to be the best method
-        document.open();
-        document.write('<!DOCTYPE html><html><head></head><body>+</body></html>');
-        document.close();
-
-        // Using the DOM
-        // var htmlElement;
-        // var bodyElement;
-        //
-        // document.removeChild(document.documentElement);
-        // htmlElement = document.createElement('html');
-        // bodyElement = document.createElement('body');
-        // bodyElement.innerHTML = "+";
-        // htmlElement.appendChild(bodyElement);
-        // document.appendChild(htmlElement);
-
-        // Using jQuery - but how do we recreate and append the html element?
-        // $('html').remove();
-    }
-*/
-
-/*
-    function removeElementFromDom(element) {
-        var children;
-        var i;
-        var attributes;
-        var attributeName;
-
-        if (element) {
-            children = element.childNodes;
-            if (children) {
-                for (i = children.length - 1; i >= 0; i--) {
-                     removeElementFromDom(children[i]);
-                }
-            }
-
-            attributes = element.attributes;
-            if (attributes) {
-                for (i = attributes.length - 1; i >= 0; i--) {
-                    attributeName = attributes[i].name;
-                    if (typeof element.getAttribute(attributeName) === 'function') {
-                        element.removeAttribute(attributeName) = null;
-                    }
-                }
-            }
-
-            element.parentNode.removeChild(element);
-        }
-    }
-*/
 
 
 /**
@@ -500,45 +459,6 @@ tmc.ScraperJS.prototype.crawlLink = function(link) {
     }
 };
 
-
-/*
-    function extractLinksFromDom() {
-        var objPageUrl;
-        var strBaseUrl;
-        var objBaseUrl;
-
-        objPageUrl = nodeUrl.parse(window.location.href);
-
-        // Determine the base url
-        strBaseUrl = $('base[href]').attr('href');
-        if (strBaseUrl === undefined) {
-            objBaseUrl = objPageUrl;
-        }
-        else {
-            objBaseUrl = nodeUrl.parse(strBaseUrl);
-        }
-
-        // Extract <a> and <area> tags' href attribute
-        $('a[href]').add('area[href]').each(function() {
-            var objUrl = nodeUrl.parse($(this).attr('href'));
-            objUrl = getLoadableUrlObj(objUrl, objBaseUrl, objPageUrl);
-
-            if (objUrl !== null) {
-                enqueue(nodeUrl.format(objUrl), 1);
-            }
-        });
-
-        // Extract <frame> and <iframe> tags' src attribute 
-        $('frame[src]').add('iframe[src]').each(function() {
-            var objUrl = nodeUrl.parse($(this).attr('src'));
-            urlObj = getLoadableUrlObj(objUrl, objBaseUrl, objPageUrl);
-            
-            if (objUrl !== null) {
-                enqueue(nodeUrl.format(objUrl), 1);
-            }
-        });
-    }
-*/
 
 /**
  * Process HTML
