@@ -50,7 +50,7 @@ function Ac(a){var b=zc(a),c;a:switch(b){case 200:case 201:case 202:case 204:cas
 q.remove=function(){var a=this.o,b=a.length,c=a[0];if(!(0>=b)){if(1==b){if(!v(a))for(b=a.length-1;0<=b;b--)delete a[b];a.length=0}else{a[0]=a.pop();for(var a=0,b=this.o,d=b.length,f=b[a];a<d>>1;){var e=2*a+1,h=2*a+2,e=h<d&&b[h].getKey()<b[e].getKey()?h:e;if(b[e].getKey()>f.getKey())break;b[a]=b[e];a=e}b[a]=f}return c.sa}};q.s=function(){for(var a=this.o,b=[],c=a.length,d=0;d<c;d++)b.push(a[d].sa);return b};q.z=function(){for(var a=this.o,b=[],c=a.length,d=0;d<c;d++)b.push(a[d].getKey());return b};
 q.q=function(a){return Aa(this.o,function(b){return b.getKey()==a})};q.m=function(){return new Cc(this)};q.U=function(){return this.o.length};q.ha=function(){return 0==this.o.length};function Ec(){Cc.call(this)}C(Ec,Cc);/*
  
- ScraperJS -- Copyright (C) 2011-2012 365multimedia.com
+ ScraperJS Copyright (C) 2011-2012 365multimedia.com
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
