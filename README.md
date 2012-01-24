@@ -21,7 +21,7 @@ use [Google Closure Compiler](http://closure-compiler.appspot.com/home):
 // ==/ClosureCompiler==
 ```
 
-Or use the following command line (assuming scaper.js is in a director named scraperjs located at the same level as the closure-library directory:
+Or use the following command line (assuming scaper.js is in a directory named scraperjs located at the same level as the closure-library directory:
 ```
 closure-library/closure/bin/build/closurebuilder.py 
 --root=closure-library/ 
