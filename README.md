@@ -23,5 +23,12 @@ use [Google Closure Compiler](http://closure-compiler.appspot.com/home):
 
 Or use the following command line (assuming scaper.js is in a director named scraperjs located at the same level as the closure-library directory:
 ```
-closure-library/closure/bin/build/closurebuilder.py --root=closure-library/ --root=scraperjs/ --namespace="tmc.ScraperJS" --output_mode=compiled --compiler_jar=compiler.jar --compiler_flags="--compilation_level=ADVANCED_OPTIMIZATIONS" > scraperjs/min-scraper.js
+closure-library/closure/bin/build/closurebuilder.py 
+--root=closure-library/ 
+--root=scraperjs/ 
+--namespace="tmc.ScraperJS" 
+--output_mode=compiled 
+--compiler_jar=compiler.jar 
+--compiler_flags="--compilation_level=ADVANCED_OPTIMIZATIONS" 
+> scraperjs/min-scraper.js
 ```
