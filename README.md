@@ -10,7 +10,7 @@ javascript:(function(){document.open();document.write('<!doctype%20html><html><h
  
 ## Compiling and Minifying ##
 
-Use [Google Closure Compiler](http://closure-compiler.appspot.com/home):
+Use the [Google Closure Compiler](http://closure-compiler.appspot.com/home):
 
 	// ==ClosureCompiler==
 	// @compilation_level ADVANCED_OPTIMIZATIONS
