@@ -37,10 +37,28 @@ tmc.ScraperJS = function() {
 
 
 /**
+ * Matches the start of a text/html document.
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_HTML_SNIFFER = /^\s*<(?:!DOCTYPE\s+HTML|HTML|HEAD|SCRIPT|IFRAME|H1|DIV|FONT|TABLE|A|STYLE|TITLE|B|BODY|BR|P|!--)[\s>]/i;
+
+
+/**
+ * Matches the start of an application/pdf document.
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_PDF_SNIFFER = /^%PDF-/;
+
+
+/**
  * Matches a link depth and url (link format is linkDepthr>absoluteUrl).
  *
- * @const
  * @type {!RegExp}
+ * @const
  */
 tmc.ScraperJS.RX_PARSE_LINK = /^([^>]*)>(.*)$/;
 
@@ -48,8 +66,8 @@ tmc.ScraperJS.RX_PARSE_LINK = /^([^>]*)>(.*)$/;
 /**
  * Matches <base> tag's href attribute value.
  *
- * @const
  * @type {!RegExp}
+ * @const
  */
 tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)/gi;
 
@@ -95,8 +113,8 @@ tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s
  * )
  * </code>
  *
- * @const
  * @type {!RegExp}
+ * @const
  */
 tmc.ScraperJS.RX_HTML_URL_EXTRACTOR = /<(?:(?:a(?:rea)?\s+(?:[^<>\s]+\s+)*?href|i?frame\s+(?:[^<>\s]+\s+)*?src)\s*=\s*['"]?([^'"<>\s]+)|link\s+(?:(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"]?\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)|(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)['"]?\s+(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"<>\s]))/gi;
 
@@ -130,6 +148,7 @@ tmc.ScraperJS.prototype.maxCrawledLinks_ = 0;
 
 /**
  * Maximum amount of time allowed for fetching a link (expressed in milliseconds, 0 for unlimited).
+ * Defaults to 60 seconds.
  *
  * @type {!number}
  * @private
@@ -138,12 +157,124 @@ tmc.ScraperJS.prototype.maxLinkFetchTime_ = 60 * 1000;
 
 
 /**
- * List of rules to execute to compute link priority.
+ * Array of mime sniffers that will be used to determine the mime type of a document based on its first 512 characters.
  *
- * @type {?Array.<!Object>}
+ * A mime sniffer is a rule consisting of (1) a regular expression (the "if" part) and (2) a mime type (the "then" part) 
+ * that will be used when the regular expression matches against the document's content.
+ *
+ * Here is an exemple:
+ * <code>
+ * [
+ *   {regex: /^\s*<(?:!DOCTYPE\s+HTML|HTML|HEAD|SCRIPT|IFRAME|H1|DIV|FONT|TABLE|A|STYLE|TITLE|B|BODY|BR|P|!--)[\s>]/i, mime:'text/html'},
+ *   {regex: /^%PDF-/, mime:'application/pdf'}
+ * ]
+ * </code>
+ *
+ * Here is how the logic works:
+ * 1. Select the first mime sniffer's regular expression and match it against the document's content
+ * 2. If the match is successful, assign the sniffer's mime type value to the document and stop there
+ * 3. If the match is not successful, go to the next sniffer in the array
+ * 4. If nor sniffer match, set the document's mime type to null
+ *
+ * @type {?Array.<{regex:!RegExp, mime:string}>}
+ * @private
+ */
+tmc.ScraperJS.prototype.mimeSniffers_ = null;
+
+
+/**
+ * Map of data extractors that will be used to extract data from a document. 
+ *
+ * The format is the following:
+ * <code>
+ * {
+ *   'mime/type1': function1,
+ *   'mime/type2': function2
+ *   ...
+ * }
+ * </code>
+ *
+ * Here is how the logic works:
+ * 1. Select the function corresponding to the document's mime type
+ * 2. Execute the function
+ *
+ * @type {?Object.<!string,!function(string)>}
+ * @private
+ */
+tmc.ScraperJS.prototype.dataExtractors_ = null;
+
+
+/**
+ * Map of link extractors that will be used to extract links from a document. 
+ *
+ * The format is the following:
+ * <code>
+ * {
+ *   'mime/type1': regex1,
+ *   'mime/type2': regex2
+ *   ...
+ * }
+ * </code>
+ *
+ * Here is how the logic works:
+ * 1. Select the regular expression corresponding to the document's mime type
+ * 2. Match the regular expression against the document's content
+ * 3. For each match return the first non-undefined capture block
+ *
+ * @type {?Object.<!string,!RegExp>}
+ * @private
+ */
+tmc.ScraperJS.prototype.linkExtractors_ = null;
+
+
+/**
+ * Array of priority rules that will be used to compute the priority of a link.
+ *
+ * A rule consists of (1) a regular expression (the "if" part) and (2) a priority (the "then" part) 
+ * that will be used when the regular expression matches against the link.
+ *
+ * Here is an exemple:
+ * <code>
+ * [
+ *   {regex: /page=/, priority: 10},
+ *   {regex: /.+/, priority: -20}
+ * ]
+ * </code>
+ *
+ * The prioroity can be: 
+ * <code>integer</code>: a positive or negative number (the bigger, the higher the prioroity)
+ * <code>'++'</code>: highest prioroity encountered so far + 1
+ * <code>'--'</code>: lowest priority encountered so far - 1
+ * <code>null</code>: tells the crawler to ignore this link
+ *
+ * Here is how the logic works:
+ * 1. Select the first rule's regular expression and match it against a link
+ * 2. If the match is successful, assign the rule's priority value to the link and stop there
+ * 3. If the match is not successful, go to the next rule in the array
+ * 4. If no rule match, set the link's prioroity to 0
+ *
+ * @type {?Array.<{regex:!RegExp, priority:(?number|?string)}>}
  * @private
  */
 tmc.ScraperJS.prototype.linkPriorityRules_ = null;
+
+
+/**
+ * Time when the crawl was started (expressed in milliseconds since the epoch).
+ *
+ * @type {!number}
+ * @private
+ */
+tmc.ScraperJS.prototype.startCrawlTime_ = 0;
+
+
+/**
+ * Number of links that have been crawled so far.
+ *
+ * @type {!number}
+ * @private
+ */
+tmc.ScraperJS.prototype.numCrawledLinks_ = 0;
 
 
 /**
@@ -183,45 +314,6 @@ tmc.ScraperJS.prototype.linkStatuses_ = null;
 
 
 /**
- * Time when the crawl was started (expressed in milliseconds since the epoch).
- *
- * @type {!number}
- * @private
- */
-tmc.ScraperJS.prototype.startCrawlTime_ = 0;
-
-
-/**
- * Number of links that have been crawled so far.
- *
- * @type {!number}
- * @private
- */
-tmc.ScraperJS.prototype.numCrawledLinks_ = 0;
-
-
-/**
- * The link extractors that the ScraperJS should be using to extract links from a document. 
- * The format is the following:
- * <code>
- * {
- *   'mime/type1': regex1,
- *   'mime/type2': regex2
- *   ...
- * }
- * </code>
- *
- * Here is how the logic works:
- * 1. Select the regular expression corresponding to the document mime type
- * 2. Match the regular expression against the document
- * 3. For each match return the first non-undefined capture block
- *
- * @type {?Object.<!RegExp>}
- */
-tmc.ScraperJS.prototype.linkExtractors_ = null;
-
-
-/**
  * Hash table used to avoid duplicate results.
  *
  * @type {?Object.<number>}
@@ -233,9 +325,12 @@ tmc.ScraperJS.prototype.uniqueResults_ = null;
  * Sets the maximum amount of time allowed for the crawl (expressed in milliseconds, 0 for unlimited).
  *
  * @param {!number} maxCrawlTime maximum amount of time allowed for the crawl (expressed in milliseconds, 0 for unlimited).
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
 tmc.ScraperJS.prototype.setMaxCrawlTime = function(maxCrawlTime) {
     this.maxCrawlTime_ = maxCrawlTime;
+    return this;
 };
 
 
@@ -251,9 +346,12 @@ tmc.ScraperJS.prototype.getMaxCrawlTime = function() {
  * Sets the maximum depth allowed for the crawl (0 for unlimited).
  *
  * @param {!number} maxCrawlDepth maximum depth allowed for the crawl (0 for unlimited).
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
 tmc.ScraperJS.prototype.setMaxCrawlDepth = function(maxCrawlDepth) {
     this.maxCrawlDepth_ = maxCrawlDepth;
+    return this;
 };
 
 
@@ -269,9 +367,12 @@ tmc.ScraperJS.prototype.getMaxCrawlDepth = function() {
  * Sets the maximum number of links to crawl (0 for unlimited).
  *
  * @param {!number} maxCrawledLinks maximum number of links to crawl (0 for unlimited).
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
 tmc.ScraperJS.prototype.setMaxCrawledLinks = function(maxCrawledLinks) {
     this.maxCrawledLinks_ = maxCrawledLinks;
+    return this;
 };
 
 
@@ -287,9 +388,12 @@ tmc.ScraperJS.prototype.getMaxCrawledLinks = function() {
  * Sets the maximum amount of time allowed for fetching a link (expressed in milliseconds, 0 for unlimited).
  *
  * @param {!number} maxLinkFetchTime maximum amount of time allowed for fetching a link (expressed in milliseconds, 0 for unlimited).
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
 tmc.ScraperJS.prototype.setMaxLinkFetchTime = function(maxLinkFetchTime) {
     this.maxLinkFetchTime_ = maxLinkFetchTime;
+    return this;
 };
 
 
@@ -302,27 +406,64 @@ tmc.ScraperJS.prototype.getMaxLinkFetchTime = function() {
 
 
 /**
- * Initializes the ScraperJS's instance variables to their default value.
+ * Sets the array of mime sniffers that will be used to determine the mime type of a document based on its first 512 characters.
+ *
+ * A mime sniffer is a rule consisting of (1) a regular expression (the "if" part) and (2) a mime type (the "then" part) 
+ * that will be used when the regular expression matches against the document's content.
+ *
+ * Here is an exemple:
+ * <code>
+ * [
+ *   {regex: /^\s*<(?:!DOCTYPE\s+HTML|HTML|HEAD|SCRIPT|IFRAME|H1|DIV|FONT|TABLE|A|STYLE|TITLE|B|BODY|BR|P|!--)[\s>]/i, mime:'text/html'},
+ *   {regex: /^%PDF-/, mime:'application/pdf'}
+ * ]
+ * </code>
+ *
+ * Here is how the logic works:
+ * 1. Select the first mime sniffer's regular expression and match it against the document's content
+ * 2. If the match is successful, assign the sniffer's mime type value to the document and stop there
+ * 3. If the match is not successful, go to the next sniffer in the array
+ * 4. If nor sniffer match, set the document's mime type to null
+ *
+ * @param {?Array.<{regex:!RegExp, mime:string}>} mimeSniffers array of mime sniffers.
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
-tmc.ScraperJS.prototype.init = function() {
-    this.maxCrawlTime_ = 0;
-    this.maxCrawlDepth_ = 0;
-    this.maxCrawledLinks_ = 0;
-    this.maxLinkFetchTime_ = 60 * 1000; // One minute
-    this.linkPriorityRules_ = [];
-    this.highestLinkPriority_ = 0;
-    this.lowestLinkPriority_ = 0;
-    this.linkQueue_ = new goog.structs.PriorityQueue();
-    this.linkStatuses_ = {};
-    this.startCrawlTime_ = 0;
-    this.numCrawledLinks_ = 0;
-    this.linkExtractors_ = {'text/html':tmc.ScraperJS.RX_HTML_URL_EXTRACTOR};
-    this.uniqueResults_ = [];
+tmc.ScraperJS.prototype.setMimeSniffers = function(mimeSniffers) {
+    this.mimeSniffers_ = mimeSniffers;
+    return this;    
 };
 
 
 /**
- * Sets the link extractors that the ScraperJS should be using to extract links from a document. 
+ * Sets the map of data extractors that will be used to extract data from a document. 
+ *
+ * The format is the following:
+ * <code>
+ * {
+ *   'mime/type1': function1,
+ *   'mime/type2': function2
+ *   ...
+ * }
+ * </code>
+ *
+ * Here is how the logic works:
+ * 1. Select the function corresponding to the document's mime type
+ * 2. Execute the function
+ *
+ * @param {?Object.<!string,!function(string)>} dataExtractors maps of data extractors.
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
+ */
+tmc.ScraperJS.prototype.setDataExtractors = function(dataExtractors) {
+    this.dataExtractors_ = dataExtractors;
+    return this;
+}
+
+
+/**
+ * Sets the map of link extractors that will be used to extract links from a document. 
+ *
  * The format is the following:
  * <code>
  * {
@@ -333,17 +474,101 @@ tmc.ScraperJS.prototype.init = function() {
  * </code>
  *
  * Here is how the logic works:
- * 1. Select the regular expression corresponding to the document mime type
- * 2. Match the regular expression against the document
+ * 1. Select the regular expression corresponding to the document's mime type
+ * 2. Match the regular expression against the document's content
  * 3. For each match return the first non-undefined capture block
  *
- * @param {!Object.<!RegExp>} linkExtractors the link extractors.
- * @return {!tmc.ScraperJS} the ScraperJS object to allow chaining calls.
+ * @param {!Object.<!string,!RegExp>} linkExtractors map of link extractors.
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
  */
-tmc.ScraperJS.prototype.linkExtractors = function(linkExtractors) {
+tmc.ScraperJS.prototype.setLinkExtractors = function(linkExtractors) {
     this.linkExtractors_ = linkExtractors;
     return this;
 }
+
+
+/**
+ * Sets the array of priority rules that will be used to compute the priority of a link.
+ *
+ * A rule consists of (1) a regular expression (the "if" part) and (2) a priority (the "then" part) 
+ * that will be used when the regular expression matches against the link.
+ *
+ * Here is an exemple:
+ * <code>
+ * [
+ *   {regex: /page=/, priority: 10},
+ *   {regex: /.+/, priority: -20}
+ * ]
+ * </code>
+ *
+ * The prioroity can be: 
+ * <code>integer</code>: a positive or negative number (the bigger, the higher the prioroity)
+ * <code>'++'</code>: highest prioroity encountered so far + 1
+ * <code>'--'</code>: lowest priority encountered so far - 1
+ * <code>null</code>: tells the crawler to ignore this link
+ *
+ * Here is how the logic works:
+ * 1. Select the first rule's regular expression and match it against a link
+ * 2. If the match is successful, assign the rule's priority value to the link and stop there
+ * 3. If the match is not successful, go to the next rule in the array
+ * 4. If no rule match, set the link's prioroity to 0
+ *
+ * @param {Array.<{regex:!RegExp, priority:(?number|?string)}>} linkPriorityRules array of link priority rules.
+ *
+ * @return {!tmc.ScraperJS} scraper object so as to allow method chaining.
+ */
+tmc.ScraperJS.prototype.setLinkPriorityRules = function(linkPriorityRules) {
+    this.linkPriorityRules_ = linkPriorityRules;
+    return this;
+};
+
+
+/**
+ * Initializes the ScraperJS's instance variables to their default value.
+ */
+tmc.ScraperJS.prototype.init = function() {
+    var that = this;
+
+    this.maxCrawlTime_ = 0;
+    this.maxCrawlDepth_ = 0;
+    this.maxCrawledLinks_ = 0;
+    this.maxLinkFetchTime_ = 60 * 1000;     // 60 seconds
+    this.startCrawlTime_ = 0;
+    this.mimeSniffers_ =    [
+                                {regex:tmc.ScraperJS.RX_HTML_SNIFFER, mime:'text/html'},
+                                {regex:tmc.ScraperJS.RX_PDF_SNIFFER, mime:'application/pdf'}
+                            ];
+    this.dataExtractors_ =  {
+                                '*/*':function(content) {
+                                    var rx = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,6}/gi;
+                                    var match;
+                                    var sha1;
+                                    var hash;
+
+                                    while ((match = rx.exec(content)) !== null) {
+                                        sha1 = new goog.crypt.Sha1();
+                                        sha1.update(match[0]);
+                                        hash = goog.crypt.byteArrayToString(sha1.digest());
+
+                                        if (that.uniqueResults_[hash] === undefined) {          // Ignores results previously queued
+                                            that.uniqueResults_[hash] = 1;
+                                            document.write(match[0] + '</br>')
+                                        }
+                                    }
+                                }
+                            };
+    this.linkExtractors_ =  {
+                                'text/html':tmc.ScraperJS.RX_HTML_URL_EXTRACTOR
+                            };
+    this.linkPriorityRules_ = [];
+    this.highestLinkPriority_ = 0;
+    this.lowestLinkPriority_ = 0;
+    this.linkQueue_ = new goog.structs.PriorityQueue();
+    this.linkStatuses_ = {};
+    this.numCrawledLinks_ = 0;
+    this.uniqueResults_ = [];
+};
 
 
 /**
@@ -437,12 +662,15 @@ tmc.ScraperJS.prototype.crawlLink = function(link) {
         	match[2],                                       // match[2] is the link url
         	function(e) {
         		var xhr = e.target;
-                var html;
+                var content;
+                var mime;
         		if (xhr.isSuccess()) {
-                    html = xhr.getResponseText();
-                    that.processHtml(html);
+                    content = xhr.getResponseText();
+                    mime = that.sniffMime(content);
+                    that.extractData(mime, content);
 	                that.extractLinks(
-                        html, 
+                        mime,
+                        content, 
                         xhr.getLastUri(), 
                         parseInt(match[1], 10));            // match[1] is the link depth
 	                that.crawlNextLink();
@@ -461,49 +689,97 @@ tmc.ScraperJS.prototype.crawlLink = function(link) {
 
 
 /**
- * Process HTML
+ * Determines the mime type of a document based on its first 512 characters.
+ * See {@link http://mimesniff.spec.whatwg.org/}
  *
- * @param html the html code to process.
- */
-tmc.ScraperJS.prototype.processHtml = function(html) {
-    var rx = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,6}/gi;
-    var match;
-    var sha1;
-    var hash;
+ * Here is how the logic works:
+ * 1. Select the first mime sniffer's regular expression and match it against the document's content
+ * 2. If the match is successful, returns the sniffer's mime type value and stop there
+ * 3. If the match is not successful, go to the next sniffer in the array
+ * 4. If nor sniffer match, return <code>null</code>
+ *
+ * @param {!string} content document's content.
+ *
+ * @return {?string} document's mime type or <code>null</code> if unknown.
+ */ 
+tmc.ScraperJS.prototype.sniffMime = function(content) {
+    var first512 = content.substr(0, 512);
+    var l = this.mimeSniffers_.length;
+    var sniffer;
 
-    while ((match = rx.exec(html)) !== null) {
-        sha1 = new goog.crypt.Sha1();
-        sha1.update(match[0]);
-        hash = goog.crypt.byteArrayToString(sha1.digest());
-
-        if (this.uniqueResults_[hash] === undefined) {          // Ignores results previously queued
-            this.uniqueResults_[hash] = 1;
-            document.write(match[0] + '</br>')
+    for (var i = 0; i < l; i++) {
+        sniffer = this.mimeSniffers_[i];
+        if (sniffer.regex.test(first512)) {
+            return sniffer.mime;
         }
+    }
+
+    return null;
+};
+
+
+/**
+ * Extracts data from a document.
+ *
+ * @param {!string} mime mime type of the document.
+ * @param {!string} content content of the document.
+ */
+tmc.ScraperJS.prototype.extractData = function(mime, content) {
+    // Retrieves the data extractor for the document's mime type
+    var dataExtractor = this.dataExtractors_[mime];
+
+    // Tries to use a default data extractor if none is found for the document's mime type
+    if (dataExtractor === undefined) {
+        dataExtractor = this.dataExtractors_['*/*'];
+    }
+
+    // Executes the data extractor if one has been found
+    if (dataExtractor !== undefined) {
+        dataExtractor(content);
     }
 };
 
 
 /**
- * Extracts the links from a piece of html and enqueues them.
+ * Extracts links from a document and enqueues them.
  *
- * @param {!string} linkHtml html code.
- * @param {!string} linkUrl url of the link pointing to <code>linkHtml</code>.
- * @param {!number} linkDepth depth of the link pointing to <code>linkHtml</code>.
+ * @param {!string} mime document's mime type.
+ * @param {!string} content dcoument's content.
+ * @param {!string} linkUrl url of the link pointing to <code>content</code>.
+ * @param {!number} linkDepth depth of the link pointing to <code>content</code>.
  */
-tmc.ScraperJS.prototype.extractLinks = function(linkHtml, linkUrl, linkDepth) {
+tmc.ScraperJS.prototype.extractLinks = function(mime, content, linkUrl, linkDepth) {
+    var linkExtractor;
     var match;
     var objBaseUrl;
     var objLinkUrl = new goog.Uri(linkUrl);
     var objUrl;
-    var linkExtractor;
     var numCaptureGroups;
     var url;
 
+    // Retrieves the link extractor for the document's mime type
+    linkExtractor = this.linkExtractors_[mime];
+    
+    // Tries to use a default link extractor if none is found for the document's mime type
+    if (linkExtractor === undefined) {
+        linkExtractor = this.linkExtractors_['*/*'];
+    }    
+
+    // Bails out if not data extractor has been found
+    if (linkExtractor === undefined) {
+        return;
+    }
+
     // Determines the base url
-    match = tmc.ScraperJS.RX_BASE_HREF.exec(linkHtml);
+    if (mime === 'text/html') {                         // Searches for the <base> tag if dealing with an html document
+        match = tmc.ScraperJS.RX_BASE_HREF.exec(content);
+    }
+    else {
+        match = null;
+    }
+
     if (match === null) {
-        objBaseUrl = objLinkUrl;
+        objBaseUrl = objLinkUrl;                        // If no <base> tag, the base url is the link url
     }
     else {
         try {
@@ -514,9 +790,8 @@ tmc.ScraperJS.prototype.extractLinks = function(linkHtml, linkUrl, linkDepth) {
         }
     }
 
-    linkExtractor = this.linkExtractors_['text/html'];
-
-    while ((match = linkExtractor.exec(linkHtml)) !== null) {
+    // Extracts the links
+    while ((match = linkExtractor.exec(content)) !== null) {
         numCaptureGroups = match.length;
         for (var i = 1; i < numCaptureGroups; i++) {    // Finds the first non-undefined capture group
             url = match[i];
@@ -547,6 +822,8 @@ tmc.ScraperJS.prototype.extractLinks = function(linkHtml, linkUrl, linkDepth) {
  * @param {!goog.Uri} objUrl url to be made into a loadable one.
  * @param {!goog.Uri} objBaseUrl base url for the document located at <code>objDocumentUrl</code>.
  * @param {!goog.Uri} objDocumentUrl url of the document containing a reference to <code>objUrl</code>.
+ *
+ * @return {?goog.Uri} loatable url or <code>null</code>.
  */
 tmc.ScraperJS.prototype.getLoadableUrlObj = function(objUrl, objBaseUrl, objDocumentUrl) {
 	var objLoadableUrl;
@@ -625,31 +902,10 @@ tmc.ScraperJS.prototype.enqueueLink = function(linkUrl, linkDepth) {
 
 
 /**
- * Adds a new link priority rule to the ScraperJS. A rule consists of (1) a regular expression (the "if" part)
- * and (2) a priority that will be used when the regular expression matches a link (the "then" part).
- *
- * @param {!RegExp|!string} regex regular expression used to match the rule.
- * @param {!number|!string|null} priority priority to be assigned by the rule: 
- * an <code>integer</code>, <code>'++'</code>, <code>'--'</code>, or <code>null</code>.
- */
-tmc.ScraperJS.prototype.addLinkPriorityRule = function(regex, priority) {
-    var rx;
-
-    if (typeof regex === 'string') {
-        rx = new RegExp(regex);         // If a string was passed it gets compiled into a regular expression 
-    }
-    else {
-        rx = regex;
-    }
-
-    this.linkPriorityRules_.push({regex: rx, priority: priority});
-};
-
-
-/**
  * Comptutes the crawl priority of a given link.
  *
  * @param {!string} link link whose priority is to be computed.
+ *
  * @return {?number} computed priority of the link or <code>null</code> if the link is to be ignored.
  */
 tmc.ScraperJS.prototype.computeLinkPriority = function(link) {
