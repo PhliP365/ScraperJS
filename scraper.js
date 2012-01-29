@@ -55,6 +55,165 @@ tmc.ScraperJS.RX_PDF_SNIFFER = /^%PDF-/;
 
 
 /**
+ * Matches the start of an rss document.
+ *
+ * ^                                                        page start
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <!--                                                   <!--
+ *   [^-]*(?:(?!-->)-[^-]*)*                                optional stuff inbetween
+ *   (?:-->|$)                                              --> or end of text
+ * )*                                                       0 or more repetitions
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <\?xml                                                 <?xml
+ *   [^?]*(?:(?!\?>)\?[^?]*)*                               optional stuff inbetween
+ *   (?:\?>|$)                                              ?> or end of text
+ * )+                                                       1 or more repetitions
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <                                                      <
+ *   (?:
+ *     \?xml                                                ?xml
+ *     [^?]*(?:(?!\?>)\?[^?]*)*                             optional stuff inbetween
+ *     (?:\?>|$)                                            ?> or end of text
+ *     |                                                    -- or --
+ *     !--                                                  !--
+ *     [^-]*(?:(?!-->)-[^-]*)*                              optional stuff inbetween
+ *     (?:-->|$)                                            --> or end of text
+ *   )
+ * )*                                                       0 or more repetitions
+ * \s*                                                      0 or more spaces
+ * <rss                                                     <rss
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_RSS_SNIFFER = /^(?:\s*<!--[^-]*(?:(?!-->)-[^-]*)*(?:-->|$))*(?:\s*<\?xml[^?]*(?:(?!\?>)\?[^?]*)*(?:\?>|$))+(?:\s*<(?:\?xml[^?]*(?:(?!\?>)\?[^?]*)*(?:\?>|$)|!--[^-]*(?:(?!-->)-[^-]*)*(?:-->|$)))*\s*<rss/i;
+
+
+/**
+ * Matches the start of a sitemap document.
+ *
+ * ^                                                        page start
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <!--                                                   <!--
+ *   [^-]*(?:(?!-->)-[^-]*)*                                optional stuff inbetween
+ *   (?:-->|$)                                              --> or end of text
+ * )*                                                       0 or more repetitions
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <\?xml                                                 <?xml
+ *   [^?]*(?:(?!\?>)\?[^?]*)*                               optional stuff inbetween
+ *   (?:\?>|$)                                              ?> or end of text
+ * )+                                                       1 or more repetitions
+ * (?:
+ *   \s*                                                    0 or more spaces
+ *   <                                                      <
+ *   (?:
+ *     \?xml                                                ?xml
+ *     [^?]*(?:(?!\?>)\?[^?]*)*                             optional stuff inbetween
+ *     (?:\?>|$)                                            ?> or end of text
+ *     |                                                    -- or --
+ *     !--                                                  !--
+ *     [^-]*(?:(?!-->)-[^-]*)*                              optional stuff inbetween
+ *     (?:-->|$)                                            --> or end of text
+ *   )
+ * )*                                                       0 or more repetitions
+ * \s*                                                      0 or more spaces
+ * <                                                        <
+ * (?:urlset|sitemapindex)                                  urlset or sitemapindex
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_SITEMAP_SNIFFER = /^(?:\s*<!--[^-]*(?:(?!-->)-[^-]*)*(?:-->|$))*(?:\s*<\?xml[^?]*(?:(?!\?>)\?[^?]*)*(?:\?>|$))+(?:\s*<(?:\?xml[^?]*(?:(?!\?>)\?[^?]*)*(?:\?>|$)|!--[^-]*(?:(?!-->)-[^-]*)*(?:-->|$)))*\s*<(?:urlset|sitemapindex)/i;
+
+
+/**
+ * Matches:
+ * <a> and <area> tags' href attribute value 
+ * <frame> and <iframe> tags' src attribute value
+ * <link> tags' href attribute value (if pointing to a feed)
+ *
+ * Note: the g at the end of the regular expression is required so multiple matches can be returned.
+ *
+ * <code>
+ * <                                                            <
+ * (?:
+ *   (?:
+ *     a(?:rea)?                                                a or area
+ *     \s+                                                      1 or more spaces
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     href                                                     href attribute
+ *     |                                                        -- or --
+ *     i?frame                                                  frame or iframe
+ *     \s+                                                      1 or more spaces
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     src                                                      src attribute
+ *   )
+ *   \s*=\s*['"]?                                               equality operator
+ *   ([^'"<>\s]+)                                               href or src attribute value: the url
+ *   |                                                          -- or --
+ *   link                                                       link
+ *   \s+                                                        1 or more spaces
+ *   (?:
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     type\s*=\s*['"]?application/(?:rss|atom)\+xml['"]?\s+    type attribute/value pair
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     href                                                     href attribute
+ 8     \s*=\s*['"]?                                             equality operator
+ *     ([^'"<>\s]+)                                             href attribute value: the url
+ *     |                                                        -- or --
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     href                                                     href attribute
+ *     \s*=\s*['"]?                                             equality operator
+ *     ([^'"<>\s]+)                                             href attribute value: the url
+ *     ['"]?\s+
+ *     (?:[^<>\s]+\s+)*?                                        some attribute/value pairs
+ *     type\s*=\s*['"]?application/(?:rss|atom)\+xml['"<>\s]    type attribute/value
+ *   )
+ * )
+ * </code>
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_HTML_URL_EXTRACTOR = /<(?:(?:a(?:rea)?\s+(?:[^<>\s]+\s+)*?href|i?frame\s+(?:[^<>\s]+\s+)*?src)\s*=\s*['"]?([^'"<>\s]+)|link\s+(?:(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"]?\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)|(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)['"]?\s+(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"<>\s]))/gi;
+
+
+/**
+ * Matches urls between <link> and </link> tags in an rss document
+ *
+ * Note: the g at the end of the regular expression is required so multiple matches can be returned.
+ *
+ * <code>
+ * <link(?:\s+[^<>]*)?>\s*([^<>\s]*)
+ * </code>
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_RSS_URL_EXTRACTOR = /<link(?:\s+[^<>]*)?>\s*([^<>\s]*)/gi;
+
+
+/**
+ * Matches urls between <loc> and </loc> tags in a sitemap document.
+ *
+ * Note: the g at the end of the regular expression is required so multiple matches can be returned.
+ *
+ * <code>
+ * <loc(?:\s+[^<>]*)?>\s*([^<>\s]*)
+ * </code>
+ *
+ * @type {!RegExp}
+ * @const
+ */
+tmc.ScraperJS.RX_SITEMAP_URL_EXTRACTOR = /<loc(?:\s+[^<>]*)?>\s*([^<>\s]*)/gi;
+
+
+/**
  * Matches a link depth and url (link format is linkDepthr>absoluteUrl).
  *
  * @type {!RegExp}
@@ -69,54 +228,7 @@ tmc.ScraperJS.RX_PARSE_LINK = /^([^>]*)>(.*)$/;
  * @type {!RegExp}
  * @const
  */
-tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)/gi;
-
-
-/**
- * Matches:
- * <a> and <area> tags' href attribute value 
- * <frame> and <iframe> tags' src attribute value
- * <link> tags' href attribute value (if pointing to a feed)
- *
- * <code>
- * <                                                            tag opening
- * (?:
- *   (?:
- *     a(?:rea)?\s+                                             a or area tag
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     href                                                     href attribute
- *     |                                                        -- or --
- *     i?frame\s+                                               frame or iframe tag
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     src                                                      src attribute
- *   )
- *   \s*=\s*['"]?                                               equality operator
- *   ([^'"<>\s]+)                                               the url
- *   |                                                          -- or --
- *   link\s+                                                    link tag
- *   (?:
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     type\s*=\s*['"]?application/(?:rss|atom)\+xml['"]?\s+    type attribute and its value
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     href                                                     href attribute
- 8     \s*=\s*['"]?                                             equality operator
- *     ([^'"<>\s]+)                                             the url
- *     |                                                        -- or --
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     href                                                     href attribute
- *     \s*=\s*['"]?                                             equality operator
- *     ([^'"<>\s]+)                                             the url
- *     ['"]?\s+
- *     (?:[^<>\s]+\s+)*?                                        other attributes
- *     type\s*=\s*['"]?application/(?:rss|atom)\+xml['"<>\s]    type attribute and its value
- *   )
- * )
- * </code>
- *
- * @type {!RegExp}
- * @const
- */
-tmc.ScraperJS.RX_HTML_URL_EXTRACTOR = /<(?:(?:a(?:rea)?\s+(?:[^<>\s]+\s+)*?href|i?frame\s+(?:[^<>\s]+\s+)*?src)\s*=\s*['"]?([^'"<>\s]+)|link\s+(?:(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"]?\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)|(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)['"]?\s+(?:[^<>\s]+\s+)*?type\s*=\s*['"]?application\/(?:rss|atom)\+xml['"<>\s]))/gi;
+tmc.ScraperJS.RX_BASE_HREF = /<base\s+(?:[^<>\s]+\s+)*?href\s*=\s*['"]?([^'"<>\s]+)/i;
 
 
 /**
@@ -537,6 +649,8 @@ tmc.ScraperJS.prototype.init = function() {
     this.startCrawlTime_ = 0;
     this.mimeSniffers_ =    [
                                 {regex:tmc.ScraperJS.RX_HTML_SNIFFER, mime:'text/html'},
+                                {regex:tmc.ScraperJS.RX_RSS_SNIFFER, mime:'application/rss+xml'},
+                                {regex:tmc.ScraperJS.RX_SITEMAP_SNIFFER, mime:'application/sitemap+xml'},
                                 {regex:tmc.ScraperJS.RX_PDF_SNIFFER, mime:'application/pdf'}
                             ];
     this.dataExtractors_ =  {
@@ -559,6 +673,8 @@ tmc.ScraperJS.prototype.init = function() {
                                 }
                             };
     this.linkExtractors_ =  {
+                                'application/rss+xml':tmc.ScraperJS.RX_RSS_URL_EXTRACTOR,
+                                'application/sitemap+xml':tmc.ScraperJS.RX_SITEMAP_URL_EXTRACTOR,
                                 'text/html':tmc.ScraperJS.RX_HTML_URL_EXTRACTOR
                             };
     this.linkPriorityRules_ = [];
@@ -607,7 +723,7 @@ tmc.ScraperJS.prototype.clearAllTimers = function(objWindow) {
         try {											
             objWindow.clearTimeout(id);
         }
-        catch (e) {										// Ignores errors
+        catch (e) {                                     // Ignores errors
         }
     }
 
@@ -620,7 +736,7 @@ tmc.ScraperJS.prototype.clearAllTimers = function(objWindow) {
         try {											
             objWindow.clearInterval(id);
         }
-        catch (e) {										// Ignores errors
+        catch (e) {                                     // Ignores errors
         }
     }
 };
@@ -654,12 +770,12 @@ tmc.ScraperJS.prototype.crawlNextLink = function() {
  * @param {!string} link link to visit (link format is linkDepthr>absoluteUrl).
  */
 tmc.ScraperJS.prototype.crawlLink = function(link) {
-    var match = link.match(tmc.ScraperJS.RX_PARSE_LINK);    // Extracts link depth and url
+    var match = link.match(tmc.ScraperJS.RX_PARSE_LINK);   // Extracts link depth and url
     var that = this;
 
     if (match !== null) {
     	goog.net.XhrIo.send(
-        	match[2],                                       // match[2] is the link url
+        	match[2],                                      // match[2] is the link url
         	function(e) {
         		var xhr = e.target;
                 var content;
@@ -672,17 +788,17 @@ tmc.ScraperJS.prototype.crawlLink = function(link) {
                         mime,
                         content, 
                         xhr.getLastUri(), 
-                        parseInt(match[1], 10));            // match[1] is the link depth
+                        parseInt(match[1], 10));           // match[1] is the link depth
 	                that.crawlNextLink();
                 }
                 else {
-                    that.crawlNextLink();                   // Ignores errors for the time being
+                    that.crawlNextLink();                  // Ignores errors for the time being
             	}
         	},
         	'GET', 
             undefined,
             undefined,
-        	this.maxLinkFetchTime_                          // timeout                    
+        	this.maxLinkFetchTime_                         // timeout                    
         );
     }
 };
@@ -759,7 +875,7 @@ tmc.ScraperJS.prototype.extractLinks = function(mime, content, linkUrl, linkDept
 
     // Retrieves the link extractor for the document's mime type
     linkExtractor = this.linkExtractors_[mime];
-    
+
     // Tries to use a default link extractor if none is found for the document's mime type
     if (linkExtractor === undefined) {
         linkExtractor = this.linkExtractors_['*/*'];
@@ -783,7 +899,7 @@ tmc.ScraperJS.prototype.extractLinks = function(mime, content, linkUrl, linkDept
     }
     else {
         try {
-            objBaseUrl = new goog.Uri(match[1]);
+            objBaseUrl = new goog.Uri(goog.string.unescapeEntities(match[1]));
         }
         catch (e) {                                     // Uses the link url as the base url if parsing 
             objBaseUrl = objLinkUrl;                    // the retrieved base url throws an exception
@@ -796,20 +912,19 @@ tmc.ScraperJS.prototype.extractLinks = function(mime, content, linkUrl, linkDept
         for (var i = 1; i < numCaptureGroups; i++) {    // Finds the first non-undefined capture group
             url = match[i];
             if (url !== undefined) {
+                try {
+                    objUrl = new goog.Uri(goog.string.unescapeEntities(url));
+                }
+                catch (e) {
+                    break;                              // Skips urls that throw an exception when parsed
+                }
+
+                objUrl = this.getLoadableUrlObj(objUrl, objBaseUrl, objLinkUrl);
+                if (objUrl !== null) {
+                    this.enqueueLink(objUrl.toString(), 1 + linkDepth);
+                }
                 break;
             }
-        }
-
-        try {
-            objUrl = new goog.Uri(url);
-        }
-        catch (e) {
-            continue;                                   // Skips urls that throw an exception when parsed
-        }
-
-        objUrl = this.getLoadableUrlObj(objUrl, objBaseUrl, objLinkUrl);
-        if (objUrl !== null) {
-            this.enqueueLink(objUrl.toString(), 1 + linkDepth);
         }
     }
 };
